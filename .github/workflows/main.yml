@@ -25,12 +25,33 @@ jobs:
 
       - name: Check and Setup Gradle Wrapper
         run: |
+          echo "Checking if gradle-wrapper.jar is corrupt..."
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ] || ! jar tf gradle/wrapper/gradle-wrapper.jar > /dev/null 2>&1; then
+            echo "gradle-wrapper.jar is corrupt or missing! Regenerating wrapper..."
+            rm -f gradle/wrapper/gradle-wrapper.jar
+            
+            # Try regenerating via pre-installed system gradle
+            if command -v gradle >/dev/null 2>&1; then
+              echo "Using system gradle to regenerate wrapper..."
+              gradle wrapper || echo "System gradle wrapper command failed."
+            fi
+            
+            # If still corrupt or missing, download a clean gradle-wrapper.jar
+            if [ ! -f gradle/wrapper/gradle-wrapper.jar ] || ! jar tf gradle/wrapper/gradle-wrapper.jar > /dev/null 2>&1; then
+              echo "Downloading clean gradle-wrapper.jar from official source..."
+              mkdir -p gradle/wrapper
+              curl -sLo gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.4/gradle/wrapper/gradle-wrapper.jar || \
+              curl -sLo gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/main/gradle/wrapper/gradle-wrapper.jar
+            fi
+          else
+            echo "gradle-wrapper.jar is valid."
+          fi
+          
           if [ -f gradlew ]; then
-            echo "gradlew found. Setting executable permission..."
             chmod +x gradlew
           else
-            echo "gradlew not found in repository! Generating it using pre-installed gradle..."
-            gradle wrapper --gradle-version 8.4 || gradle wrapper || echo "Could not run gradle wrapper. Falling back to system gradle."
+            echo "gradlew not found. Generating new wrapper..."
+            gradle wrapper || echo "Failed to generate gradlew."
             if [ -f gradlew ]; then
               chmod +x gradlew
             fi
