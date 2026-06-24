@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Zoya Voice Assistant</string>
+    <string name="accessibility_description">Enables Zoya Voice Assistant to execute powerful automation gestures (Go Home, Go Back, scrolls, clicks) when instructed by voice commands.</string>
+</resources>
