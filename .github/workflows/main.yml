@@ -1,0 +1,92 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions tab
+
+jobs:
+  build:
+    name: Build & Package APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Check and Setup Gradle Wrapper
+        run: |
+          if [ -f gradlew ]; then
+            echo "gradlew found. Setting executable permission..."
+            chmod +x gradlew
+          else
+            echo "gradlew not found in repository! Generating it using pre-installed gradle..."
+            gradle wrapper --gradle-version 8.4 || gradle wrapper || echo "Could not run gradle wrapper. Falling back to system gradle."
+            if [ -f gradlew ]; then
+              chmod +x gradlew
+            fi
+          fi
+
+      - name: Restore Debug Keystore
+        run: |
+          if [ -f debug.keystore.base64 ]; then
+            echo "Decoding debug.keystore.base64 to debug.keystore..."
+            base64 -d debug.keystore.base64 > debug.keystore
+          else
+            echo "No debug.keystore.base64 found. Standard debug keystore will be auto-generated."
+          fi
+
+      - name: Setup Placeholder Secrets Configuration
+        run: |
+          if [ ! -f .env ]; then
+            echo "GEMINI_API_KEY=dummy_key_for_compilation" > .env
+          fi
+
+      - name: Build Debug APK
+        run: |
+          if [ -f gradlew ]; then
+            ./gradlew assembleDebug --stacktrace
+          else
+            gradle assembleDebug --stacktrace
+          fi
+
+      - name: Build Release APK (Unsigned/Dummy Sign)
+        run: |
+          if [ -f gradlew ]; then
+            ./gradlew assembleRelease --stacktrace || echo "Release build skipped or failed, uploading debug APK"
+          else
+            gradle assembleRelease --stacktrace || echo "Release build skipped or failed, uploading debug APK"
+          fi
+
+      - name: Rename and Organize APKs
+        run: |
+          mkdir -p build-artifacts
+          
+          # Copy Debug APK
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk build-artifacts/Zoya_SecureVoiceOrb_Debug.apk
+          fi
+          
+          # Copy Release APK if available
+          if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+            cp app/build/outputs/apk/release/app-release-unsigned.apk build-artifacts/Zoya_SecureVoiceOrb_Release_Unsigned.apk
+          elif [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk build-artifacts/Zoya_SecureVoiceOrb_Release.apk
+          fi
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Zoya_SecureVoiceOrb_APKs
+          path: build-artifacts/
+          if-no-files-found: error
+          retention-days: 7
